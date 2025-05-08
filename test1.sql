@@ -2,8 +2,7 @@
 show databases;
 use test;
 select database();
-desc testtb;
-insert into testtb (id) values (1);
+desc testtb;insert into testtb (id) values (1);
 
 select * from testtb;
 
