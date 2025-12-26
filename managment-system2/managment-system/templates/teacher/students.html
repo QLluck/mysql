@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生管理 - 毕业设计选题管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/custom.css" rel="stylesheet">
+</head>
+<body>
+    <div class="sidebar-layout">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h5>毕业设计选题系统</h5>
+                <small class="text-muted">教师端</small>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="/index.html">首页</a></li>
+                <li><a href="/teacher/topics.html">我的课题</a></li>
+                <li><a href="/teacher/students.html" class="active">学生管理</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="text-white mb-2">
+                    <small>欢迎，<span id="userName"></span></small>
+                </div>
+                <button class="btn btn-outline-light btn-sm w-100" onclick="logout()">退出登录</button>
+            </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <div class="top-bar">
+                <h4 class="mb-0">学生管理</h4>
+            </div>
+
+            <div id="alert-container"></div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">预选我的学生列表</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>学生姓名</th>
+                                    <th>学号</th>
+                                    <th>选择课题</th>
+                                    <th>申请时间</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentList">
+                                <!-- 学生列表将在这里动态加载 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/common.js"></script>
+    <script>
+        $(document).ready(function() {
+            // 获取当前用户
+            apiRequest('/api/current_user', 'GET', null, function(response) {
+                $('#userName').text(response.data.real_name);
+            }, function() {
+                window.location.href = '/login.html';
+            });
+
+            // 加载学生列表
+            loadStudents();
+        });
+
+        function loadStudents() {
+            apiRequest('/api/selections/teacher', 'GET', null, function(response) {
+                const selections = response.data;
+                let html = '';
+                
+                if (selections.length === 0) {
+                    html = '<tr><td colspan="6" class="text-center text-muted py-4">暂无学生选择您的课题</td></tr>';
+                } else {
+                    const statusMap = {
+                        'pending': '<span class="badge bg-warning text-dark">待确认</span>',
+                        'approved': '<span class="badge bg-success">已确认</span>',
+                        'rejected': '<span class="badge bg-danger">已拒绝</span>'
+                    };
+                    
+                    selections.forEach(function(sel) {
+                        html += `
+                            <tr>
+                                <td>${sel.student_name}</td>
+                                <td>${sel.student_username}</td>
+                                <td>${sel.topic_title}</td>
+                                <td>${formatDateTime(sel.apply_time)}</td>
+                                <td>${statusMap[sel.status]}</td>
+                                <td>
+                                    ${sel.status === 'pending' ? `
+                                        <button class="btn btn-sm btn-success me-1" 
+                                                onclick="confirmStudent(${sel.id}, 'approve')">
+                                            确认
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" 
+                                                onclick="confirmStudent(${sel.id}, 'reject')">
+                                            拒绝
+                                        </button>
+                                    ` : ''}
+                                    <button class="btn btn-sm btn-danger ${sel.status === 'pending' ? 'ms-1' : ''}" 
+                                            onclick="removeStudent(${sel.id})">
+                                        剔除
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                
+                $('#studentList').html(html);
+            });
+        }
+
+        function confirmStudent(selectionId, action) {
+            const message = action === 'approve' ? '确定要确认该学生吗？' : '确定要拒绝该学生吗？';
+            
+            if (confirm(message)) {
+                apiRequest(`/api/selections/${selectionId}/confirm`, 'PUT', {action: action}, function(response) {
+                    showAlert(response.message, 'success');
+                    loadStudents();
+                });
+            }
+        }
+
+        function removeStudent(selectionId) {
+            if (confirm('确定要剔除该学生吗？此操作不可恢复！')) {
+                $.ajax({
+                    url: `/api/selections/teacher/${selectionId}`,
+                    method: 'DELETE',
+                    success: function(response) {
+                        if (response.success) {
+                            showAlert(response.message, 'success');
+                            loadStudents();
+                        } else {
+                            showAlert(response.message, 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        showAlert(xhr.responseJSON?.message || '操作失败', 'danger');
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>
